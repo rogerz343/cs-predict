@@ -1,0 +1,5 @@
+# downloaded matches html files
+/match_pages
+
+# eclipse
+.settings/
