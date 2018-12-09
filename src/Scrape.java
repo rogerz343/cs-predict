@@ -1,8 +1,13 @@
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -16,7 +21,7 @@ public class Scrape {
 	
 	public static void main(String[] args) {
 		try {
-			fetchMatches();
+			extractMatchData();
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -68,6 +73,88 @@ public class Scrape {
 			Thread.sleep(100);
 		}
 		br.close();
+	}
+	
+	/**
+	 * Saves some of the relevant data from the html file into a text document
+	 */
+	public static void extractMatchData() throws Exception {
+		List<String> bongo = new ArrayList<>();
+		for (File file : new File("./match_pages").listFiles()) {
+			try {
+				String matchId = file.getName().split("\\.")[0];
+				Document doc = Jsoup.parse(file, null);
+				
+				Element teamDiv = doc.getElementsByClass("standard-box teamsBox").get(0);
+				String team1 = teamDiv.getElementsByClass("team1-gradient").get(0)
+						.getElementsByClass("teamName").get(0).text();
+				String team2 = teamDiv.getElementsByClass("team2-gradient").get(0)
+						.getElementsByClass("teamName").get(0).text();
+				
+				String unixDate = "0";
+				for (Element e : doc.getElementsByClass("date")) {
+					if (e.tagName().equals("div")) {
+						unixDate = e.attr("data-unix");		// this is not misspelled
+					}
+				}
+				
+				Map<String, String> mapScores = new HashMap<>();	// mapname -> score
+				for (Element div : doc.getElementsByClass("mapholder")) {
+					String mapName = div.getElementsByClass("mapname").get(0).text();
+					for (Element innerDiv : div.getElementsByClass("results")) {
+						String winnerScore = innerDiv.getElementsByClass("won").get(0).text();
+						String loserScore = innerDiv.getElementsByClass("lost").get(0).text();
+						mapScores.put(mapName, winnerScore + "-" + loserScore);
+					}
+				}
+				Map<String, String> idToMap = new HashMap<>();		// id -> mapname
+				for (Element div : doc.getElementsByClass("matchstats").get(0)
+						.getElementsByClass("dynamic-map-name-full")) {
+					if (div.text().equals("All maps")) { continue; }
+					idToMap.put(div.attr("id"), div.text());
+				}
+	
+				int i = 0;
+				for (Map.Entry<String, String> e : idToMap.entrySet()) {
+					String id = e.getKey();
+					String mapname = e.getValue();
+					String score = mapScores.get(mapname);
+					if (score == null) { break; }
+					String team1Score = score.split("-")[0];
+					String team2Score = score.split("-")[1];
+					Element div = doc.getElementById(id + "-content");
+					BufferedWriter bw = new BufferedWriter(new FileWriter("./match_stats/" + matchId + "-" + i + ".txt"));
+					bw.write(team1 + ","
+							+ team1Score + ","
+							+ team2 + ","
+							+ team2Score + ","
+							+ mapname + ","
+							+ unixDate + "\n");
+					Elements playerRows = div.getElementsByTag("tr");
+					String currTeam = "ERROR";
+					for (Element playerRow : playerRows) {
+						if (playerRow.hasClass("header-row")) {
+							currTeam = playerRow.getElementsByClass("teamName").get(0).text();
+							continue;
+						}
+						String name = playerRow.getElementsByClass("statsPlayerName").get(0).text();
+						String kd = playerRow.getElementsByClass("kd").get(0).text();
+						String adr = playerRow.getElementsByClass("adr").get(0).text();
+						String kast = playerRow.getElementsByClass("kast").get(0).text();
+						bw.write(name + ","
+								+ currTeam + ","
+								+ kd + ","
+								+ adr + ","
+								+ kast + "\n");
+					}
+					bw.close();
+					++i;
+				}
+			} catch (IndexOutOfBoundsException e) {
+				bongo.add(file.getName());
+			}
+		}
+		System.out.println(bongo);
 	}
 	
 }

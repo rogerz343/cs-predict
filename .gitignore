@@ -1,5 +1,8 @@
 # downloaded matches html files
 /match_pages
 
+# stats for individual games
+/match_stats
+
 # eclipse
 .settings/
