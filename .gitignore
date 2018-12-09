@@ -4,5 +4,8 @@
 # stats for individual games
 /match_stats
 
+# stats for individual players
+/player_stats
+
 # eclipse
-.settings/
+/.settings
