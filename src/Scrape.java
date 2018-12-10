@@ -27,8 +27,8 @@ public class Scrape {
 			// fetchUrls();
 			// fetchMatches();
 			// extractMatchData();
-			savePlayerData();
-			// generateFeaturesLabels();
+			// savePlayerData();
+			generateFeaturesLabels();
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -284,12 +284,10 @@ public class Scrape {
 		
 		// first, just load all player data
 		Map<String, List<Stats>> playerStats = new HashMap<>();
-//		Map<String, Map<String, List<StatsByMap>>> playerStatsByMap = new HashMap<>();
 		int debugcount = 0;
 		for (File file : new File("./player_stats").listFiles()) {
 			String name = file.getName();
 			playerStats.put(name, new ArrayList<>());
-//			playerStatsByMap.put(name, new HashMap<>());
 			
 			BufferedReader br = new BufferedReader(new FileReader(file));
 			int numGames = Integer.parseInt(br.readLine());
@@ -455,6 +453,7 @@ public class Scrape {
 					for (; index >= 0; --index) {
 						Stats gameStats = statsList.get(index);
 						if (gameStats.date >= date) { continue; }
+						if (gameStats.date < date - ONE_HUNDRED_DAYS) { break; }
 						++numGamesInRange;
 						sum_winrate += gameStats.win;
 						sum_roundsWon += gameStats.roundsWon;
