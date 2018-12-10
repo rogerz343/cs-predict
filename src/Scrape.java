@@ -6,6 +6,7 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,8 +26,8 @@ public class Scrape {
 			// fetchUrls();
 			// fetchMatches();
 			// extractMatchData();
-			savePlayerData();
-			// generateFeaturesLabels();
+			// savePlayerData();
+			generateFeaturesLabels();
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -86,9 +87,9 @@ public class Scrape {
 	public static void extractMatchData() throws Exception {
 		List<String> badFiles = new ArrayList<>();
 		int debugCount = 0;
+		int i = 0;
 		for (File file : new File("./match_pages").listFiles()) {
 			try {
-				String matchId = file.getName().split("\\.")[0];
 				Document doc = Jsoup.parse(file, null);
 				
 				Element teamDiv = doc.getElementsByClass("standard-box teamsBox").get(0);
@@ -120,7 +121,6 @@ public class Scrape {
 					idToMap.put(div.attr("id"), div.text());
 				}
 	
-				int i = 0;
 				for (Map.Entry<String, String> e : idToMap.entrySet()) {
 					String id = e.getKey();
 					String mapname = e.getValue();
@@ -129,7 +129,7 @@ public class Scrape {
 					String team1Score = score.split("-")[0];
 					String team2Score = score.split("-")[1];
 					Element div = doc.getElementById(id + "-content");
-					BufferedWriter bw = new BufferedWriter(new FileWriter("./match_stats/" + matchId + "-" + i + ".txt"));
+					BufferedWriter bw = new BufferedWriter(new FileWriter("./match_stats/" + i + ".txt"));
 					bw.write(team1 + ","
 							+ team1Score + ","
 							+ team2 + ","
@@ -171,7 +171,8 @@ public class Scrape {
 	 * @throws Exception 
 	 */
 	public static void savePlayerData() throws Exception {
-		Map<String, Stats> playerStats = new HashMap<>();
+		Map<String, List<Stats>> playerStats = new HashMap<>();
+		Map<String, Map<String, List<StatsByMap>>> playerStatsByMap = new HashMap<>();
 		int debugcount = 0;
 		for (File file : new File("./match_stats").listFiles()) {
 			try {
@@ -201,26 +202,19 @@ public class Scrape {
 					double k = Double.parseDouble(playerRow[2].split("-")[0]);
 					double d = Double.parseDouble(playerRow[2].split("-")[1]);
 					double pm = (30 + Math.max(-30, Math.min(30, k - d))) / 60.0;
-					double adr = Math.max(200.0, Double.parseDouble(playerRow[3])) / 200.0;
+					double adr = Math.min(200.0, Double.parseDouble(playerRow[3])) / 200.0;
 					double kast = Double.parseDouble(playerRow[4].split("%")[0]) / 100.0;
 					
-					if (!playerStats.containsKey(name)) { playerStats.put(name, new Stats()); }
-					Stats stats = playerStats.get(name);
-					stats.dates.add(date);
-					stats.wins.add(team.equals(winner) ? 1 : 0);
-					stats.roundsWon.add(roundsWon);
-					stats.pms.add(pm);
-					stats.adrs.add(adr);
-					stats.kasts.add(kast);
-					if (!stats.winsByMap.containsKey(mapName)) { stats.winsByMap.put(mapName, new StatsByMap()); }
-					stats.winsByMap.get(mapName).dates.add(date);
-					stats.winsByMap.get(mapName).wins.add(team.equals(winner) ? 1 : 0);
-					stats.winsByMap.get(mapName).roundsWon.add(roundsWon);
+					if (!playerStats.containsKey(name)) { playerStats.put(name, new ArrayList<>()); }
+					playerStats.get(name).add(new Stats(date, team.equals(winner) ? 1 : 0, roundsWon, pm, adr, kast));
+					
+					if (!playerStatsByMap.containsKey(name)) { playerStatsByMap.put(name, new HashMap<>()); }
+					if (!playerStatsByMap.get(name).containsKey(mapName)) { playerStatsByMap.get(name).put(mapName, new ArrayList<>()); }
+					playerStatsByMap.get(name).get(mapName).add(new StatsByMap(date, team.equals(winner) ? 1 : 0, roundsWon));
 				}
 				br.close();
 				++debugcount;
-				if (debugcount % 100 == 0) { System.out.println(debugcount); }
-				// if (debugcount > 10000) { break; }
+				if (debugcount % 100 == 0) { System.out.println(debugcount + "..."); }
 			} catch (NumberFormatException nfe) {
 				System.out.println("bad format: " + file.getName());
 			} catch (NullPointerException npe) {
@@ -228,68 +222,232 @@ public class Scrape {
 			}
 		}
 		
-		for (Map.Entry<String, Stats> entry : playerStats.entrySet()) {
-			// System.out.println(entry.getKey());
+		for (String player : playerStats.keySet()) {
+			List<Stats> statsList = playerStats.get(player);
+			Map<String, List<StatsByMap>> playerSBM = playerStatsByMap.get(player);
 			BufferedWriter bw;
 			try {
-				bw = new BufferedWriter(new FileWriter(new File("./player_stats/" + entry.getKey())));
+				bw = new BufferedWriter(new FileWriter(new File("./player_stats/" + player)));
 				
-				Stats stats = entry.getValue();
-				bw.write(stats.dates.toString() + '\n');
-				bw.write(stats.wins.toString() + '\n');
-				bw.write(stats.roundsWon.toString() + '\n');
-				bw.write(stats.pms.toString() + '\n');
-				bw.write(stats.adrs.toString() + '\n');
-				bw.write(stats.kasts.toString() + '\n');
-				bw.write(stats.winsByMap.size() + '\n');
-				for (Map.Entry<String, StatsByMap> innerEntry : stats.winsByMap.entrySet()) {
-					bw.write(innerEntry.getKey());
-					bw.write(innerEntry.getValue().dates.toString());
-					bw.write(innerEntry.getValue().wins.toString());
-					bw.write(innerEntry.getValue().roundsWon.toString());
+				bw.write(statsList.size() + "\n");
+				for (Stats stats : statsList) {
+					bw.write(stats.date + ","
+							+ stats.win + ","
+							+ stats.roundsWon + ","
+							+ stats.pm + ","
+							+ stats.adr + ","
+							+ stats.kast + "\n");
+				}
+				bw.write(playerSBM.size() + "\n");
+				for (Map.Entry<String, List<StatsByMap>> innerEntry : playerSBM.entrySet()) {
+					bw.write(innerEntry.getKey() + "\n");			// map name
+					bw.write(innerEntry.getValue().size() + "\n");	// num matches on this map
+					for (StatsByMap sbm : innerEntry.getValue()) {
+						bw.write(sbm.date + ","
+								+ sbm.win + ","
+								+ sbm.roundsWon + "\n");
+					}
 				}
 				bw.close();
 			} catch (Exception e) {
-				System.out.println("player name has invalid characters: " + entry.getKey());
+				System.out.println("player name has invalid characters: " + player);
+			}
+		}
+	}
+	
+	public final long ONE_HUNDRED_DAYS = 8_640_000_000L;
+	
+	/**
+	 * Uses the outputs of savePlayerData() to create [feature -> label] entries, where
+	 * the features for a particular instance (each game is one instance) consist of
+	 * THE DIFFERENCE between the two teams's:
+	 * - average of the 5 players's winrates in the past 100 days
+	 * - average of the 5 players's number of rounds won per game in the past 100 days
+	 * - average of the 5 players's winrates on the given map in the past 100 days
+	 * - average of the 5 players's number of rounds won per game on the given map in the past 100 days
+	 * - average of the 5 players's k-d difference in the past 100 days
+	 * - average of the 5 players's adr in the past 100 days
+	 * - average of the 5 players's kast in the past 100 days
+	 * - (todo) average of the 5 players's rws
+	 * - (todo) average of the 5 players's pistol round winrate
+	 * - (todo) average of the 5 players's team entry frags per game
+	 * 
+	 * The output files are located in "./Xy.txt"
+	 */
+	public static void generateFeaturesLabels() throws Exception {
+		// TODO: maybe optimize this function
+		
+		// first, just load all player data
+		Map<String, List<Stats>> playerStats = new HashMap<>();
+		Map<String, Map<String, List<StatsByMap>>> playerStatsByMap = new HashMap<>();
+		int debugcount = 0;
+		for (File file : new File("./player_stats").listFiles()) {
+			String name = file.getName();
+			playerStats.put(name, new ArrayList<>());
+			playerStatsByMap.put(name, new HashMap<>());
+			
+			BufferedReader br = new BufferedReader(new FileReader(file));
+			int numGames = Integer.parseInt(br.readLine());
+			for (int i = 0; i < numGames; ++i) {
+				String[] tokens = br.readLine().split(",");
+				playerStats.get(name).add(new Stats(
+						Long.parseLong(tokens[0]),
+						Integer.parseInt(tokens[1]),
+						Double.parseDouble(tokens[2]),
+						Double.parseDouble(tokens[3]),
+						Double.parseDouble(tokens[4]),
+						Double.parseDouble(tokens[5])
+						));
+			}
+			Collections.sort(playerStats.get(name));
+			
+			int numMaps = Integer.parseInt(br.readLine());
+			for (int i = 0; i < numMaps; ++i) {
+				List<StatsByMap> gamesOnMap = new ArrayList<>();
+				String mapName = br.readLine();
+				int numGamesOnMap = Integer.parseInt(br.readLine());
+				for (int j = 0; j < numGamesOnMap; ++j) {
+					String[] tokens = br.readLine().split(",");
+					gamesOnMap.add(new StatsByMap(
+							Long.parseLong(tokens[0]),
+							Integer.parseInt(tokens[1]),
+							Double.parseDouble(tokens[2])
+							));
+				}
+				Collections.sort(gamesOnMap);
+				playerStatsByMap.get(name).put(mapName, gamesOnMap);
+			}
+			br.close();
+			++debugcount;
+			if (debugcount % 200 == 0) { System.out.println(debugcount + "..."); }
+		}
+		
+		System.out.println("done reading player data...");
+		
+		for (File file : new File("./match_stats").listFiles()) {
+			try {
+				BufferedReader br = new BufferedReader(new FileReader(file));
+				String[] gameSummary = br.readLine().split(",");	// first line is summary data
+				long date = Long.parseLong(gameSummary[5]);
+				String team1 = gameSummary[0];
+				String team2 = gameSummary[2];
+				String winner = gameSummary[0];
+				int winnerScore = Integer.parseInt(gameSummary[1]);
+				int loserScore = Integer.parseInt(gameSummary[3]);
+				if (winnerScore < loserScore) {
+					winner = gameSummary[2];
+					int temp = winnerScore;
+					winnerScore = loserScore;
+					loserScore = temp;
+				}
+				List<String> team1Players = new ArrayList<>();
+				List<String> team2Players = new ArrayList<>();
+				String mapName = gameSummary[4];
+				for (int i = 0; i < 10; ++i) {
+					String[] playerRow = null;
+					try {
+						playerRow = br.readLine().split(",");
+					} catch (NullPointerException npe) {
+						System.out.println("bad format, skipping this match...");
+						break;
+					}
+					String name = playerRow[0];
+					String team = playerRow[1];
+					if (team.equals(team1)) {
+						team1Players.add(name);
+					} else if (team.equals(team2)){
+						team2Players.add(name);
+					} else {
+						throw new Exception();
+					}
+				}
+				br.close();
+				
+				
+				
+//				public Instance(double avg_winrate,
+//						double avg_roundsWon,
+//						double avg_map_winrate,
+//						double avg_map_roundsWon,
+//						double avg_pm,
+//						double avg_adr,
+//						double avg_kast)
+			} catch (Exception e) {
+				System.out.println("exception, skipping current match...");
 			}
 		}
 	}
 	
 	/**
-	 * Uses the outputs of savePlayerData() to create [feature -> label] entries, where
-	 * the features consist of
-	 * - average of the 5 players's winrates in the past 200 days
-	 * - average number of rounds won per game in the past 200 days
+	 * Provides stats about a particular player for a particular game.
 	 */
-	public static void generateFeaturesLabels() {
+	static class Stats implements Comparable<Stats> {
+		long date;				// measured in milliseconds since 1/1/1970 00:00:00
+		int win;				// value in {0, 1} (0 = loss, 1 = win)
+		double roundsWon;		// value in [0, 1]; := min(actual_rounds_won, 16) / 16
+		double pm;				// value in [0, 1]; := ((k - d) + 30) / 60
+		double adr;			// value in [0, 1]; := min(actual_adr, 200) / 200
+		double kast;			// value in [0, 1]
+		public Stats(long date, int win, double roundsWon, double pm, double adr, double kast) {
+			this.date = date;
+			this.win = win;
+			this.roundsWon = roundsWon;
+			this.pm = pm;
+			this.adr = adr;
+			this.kast = kast;
+		}
 		
-	}
-	
-	static class Stats {
-		// all of these lists should be the same length
-		List<Long> dates = new ArrayList<>();					// measured in time since 1/1/1970 00:00:00
-		List<Integer> wins = new ArrayList<>();					// values are in {0, 1} (0 = loss, 1 = win)
-		List<Double> roundsWon = new ArrayList<>();				// values are in [0, 1]; := min(actual_rounds_won, 16) / 16
-		List<Double> pms = new ArrayList<>();					// values are in [0, 1]; := ((k - d) + 30) / 60
-		List<Double> adrs = new ArrayList<>();					// values are in [0, 1]
-		List<Double> kasts = new ArrayList<>();					// values are in [0, 1]
+		@Override
+		public int compareTo(Stats arg0) {
+			return (int) (this.date - arg0.date);
+		}
 		
-		// map name -> [dates, wins]
-		// example entry: "cache"=[[100, 101, 102, 103], [1, 0, 1, 1]]
-		// first list is dates (in unix time)
-		// second list is 1 for win, 0 for loss
-		// third list is number of rounds won in that game (usually max 16)
-		Map<String, StatsByMap> winsByMap = new HashMap<>();		// map name -> [dates, wins]
+		
 	}
 	
 	
 	/**
 	 * A somewhat simpler version of Stats, intended to be used in a Map<String, StatsByMap>
 	 */
-	static class StatsByMap {
-		List<Long> dates = new ArrayList<>();
-		List<Integer> wins = new ArrayList<>();
-		List<Double> roundsWon = new ArrayList<>();
+	static class StatsByMap implements Comparable<StatsByMap> {
+		long date;
+		int win;
+		double roundsWon;
+		public StatsByMap(long date, int win, double roundsWon) {
+			this.date = date;
+			this.win = win;
+			this.roundsWon = roundsWon;
+		}
+		
+		@Override
+		public int compareTo(StatsByMap arg0) {
+			return (int) (this.date - arg0.date);
+		}
+	}
+	
+	static class Instance {
+		double avg_winrate;
+		double avg_roundsWon;
+		double avg_map_winrate;
+		double avg_map_roundsWon;
+		double avg_pm;
+		double avg_adr;
+		double avg_kast;
+		public Instance(double avg_winrate,
+				double avg_roundsWon,
+				double avg_map_winrate,
+				double avg_map_roundsWon,
+				double avg_pm,
+				double avg_adr,
+				double avg_kast) {
+			this.avg_winrate = avg_winrate;
+			this.avg_roundsWon = avg_roundsWon;
+			this.avg_map_winrate = avg_map_winrate;
+			this.avg_map_roundsWon = avg_map_roundsWon;
+			this.avg_pm = avg_pm;
+			this.avg_adr = avg_adr;
+			this.avg_kast = avg_kast;
+		}
 	}
 	
 }
