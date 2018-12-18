@@ -1,0 +1,27 @@
+task 1: predict outcome of a match (teams)
+- logistic regression
+- naive bayes (must turn continuous into discrete bins)
+- neural networks
+- random forest
+- svm
+- very simple model: just go by team hltv rating or player ratings right before match
+for each, optimize hyperparameters with cross-validation
+
+features (calculate difference in each of these metrics as the input features);
+maybe only consider past 3 months
+- online vs lan
+- if lan, then homefield or not
+- winrate on the chosen map
+// - average of all player ratings
+- average number of rounds won in past 3 months
+- average of player ADRs
+- average of player KAST
+- average of player +/-
+- percent wins in the past month
+
+- rWs
+- percentage of pistol rounds won
+- percentage of entry frags
+
+task 2: predict individual player performance
+features: (# frags), pm, adr, kast

@@ -24,14 +24,40 @@ public class Scrape {
 	
 	public static void main(String[] args) {
 		try {
-			// fetchUrls();
-			// fetchMatches();
-			// extractMatchData();
-			// savePlayerData();
+//			fetchUrls();
+//			fetchMatches();
+//			extractMatchData();
+//			savePlayerData();
 			generateFeaturesLabels();
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
+	}
+	
+	/**
+	 * because windows filenames are case-insensitive >:(
+	 */
+	public static String encodeName(String s) {
+		StringBuilder sb = new StringBuilder();
+		for (int i = 0; i < s.length(); ++i) {
+			char c = s.charAt(i);
+			if (c >= 'A' && c <= 'Z') {
+				sb.append('.');			// we'll denote uppercase with '.'
+			}
+			sb.append(c);
+		}
+		return sb.toString();
+	}
+	
+	public static String decodeName(String s) {
+		StringBuilder sb = new StringBuilder();
+		for (int i = 0; i < s.length(); ++i) {
+			char c = s.charAt(i);
+			if (c != '.') {
+				sb.append(c);
+			}
+		}
+		return sb.toString();
 	}
 	
 	/**
@@ -113,9 +139,6 @@ public class Scrape {
 						String score1 = innerDiv.getElementsByTag("span").get(0).text();
 						String score2 = innerDiv.getElementsByTag("span").get(2).text();
 						mapScores.put(mapName, score1 + "-" + score2);
-//						String winnerScore = innerDiv.getElementsByClass("won").get(0).text();
-//						String loserScore = innerDiv.getElementsByClass("lost").get(0).text();
-//						mapScores.put(mapName, winnerScore + "-" + loserScore);
 					}
 				}
 				Map<String, String> idToMap = new HashMap<>();		// id -> mapname
@@ -176,7 +199,6 @@ public class Scrape {
 	 */
 	public static void savePlayerData() throws Exception {
 		Map<String, List<Stats>> playerStats = new HashMap<>();
-//		Map<String, Map<String, List<StatsByMap>>> playerStatsByMap = new HashMap<>();
 		int debugcount = 0;
 		for (File file : new File("./match_stats").listFiles()) {
 			try {
@@ -211,10 +233,6 @@ public class Scrape {
 					
 					if (!playerStats.containsKey(name)) { playerStats.put(name, new ArrayList<>()); }
 					playerStats.get(name).add(new Stats(date, team.equals(winner) ? 1 : 0, roundsWon, pm, adr, kast, mapName));
-					
-//					if (!playerStatsByMap.containsKey(name)) { playerStatsByMap.put(name, new HashMap<>()); }
-//					if (!playerStatsByMap.get(name).containsKey(mapName)) { playerStatsByMap.get(name).put(mapName, new ArrayList<>()); }
-//					playerStatsByMap.get(name).get(mapName).add(new StatsByMap(date, team.equals(winner) ? 1 : 0, roundsWon));
 				}
 				br.close();
 				++debugcount;
@@ -228,10 +246,9 @@ public class Scrape {
 		
 		for (String player : playerStats.keySet()) {
 			List<Stats> statsList = playerStats.get(player);
-//			Map<String, List<StatsByMap>> playerSBM = playerStatsByMap.get(player);
 			BufferedWriter bw;
 			try {
-				bw = new BufferedWriter(new FileWriter(new File("./player_stats/" + player)));
+				bw = new BufferedWriter(new FileWriter(new File("./player_stats/" + encodeName(player))));
 				
 				bw.write(statsList.size() + "\n");
 				for (Stats stats : statsList) {
@@ -243,16 +260,6 @@ public class Scrape {
 							+ stats.kast + ","
 							+ stats.mapName + "\n");
 				}
-//				bw.write(playerSBM.size() + "\n");
-//				for (Map.Entry<String, List<StatsByMap>> innerEntry : playerSBM.entrySet()) {
-//					bw.write(innerEntry.getKey() + "\n");			// map name
-//					bw.write(innerEntry.getValue().size() + "\n");	// num matches on this map
-//					for (StatsByMap sbm : innerEntry.getValue()) {
-//						bw.write(sbm.date + ","
-//								+ sbm.win + ","
-//								+ sbm.roundsWon + "\n");
-//					}
-//				}
 				bw.close();
 			} catch (Exception e) {
 				System.out.println("player name has invalid characters: " + player);
@@ -273,6 +280,7 @@ public class Scrape {
 	 * - average of the 5 players's k-d difference in the past 100 days
 	 * - average of the 5 players's adr in the past 100 days
 	 * - average of the 5 players's kast in the past 100 days
+	 * - max of the 5 players's adr
 	 * - (todo) average of the 5 players's rws
 	 * - (todo) average of the 5 players's pistol round winrate
 	 * - (todo) average of the 5 players's team entry frags per game
@@ -286,7 +294,7 @@ public class Scrape {
 		Map<String, List<Stats>> playerStats = new HashMap<>();
 		int debugcount = 0;
 		for (File file : new File("./player_stats").listFiles()) {
-			String name = file.getName();
+			String name = decodeName(file.getName());
 			playerStats.put(name, new ArrayList<>());
 			
 			BufferedReader br = new BufferedReader(new FileReader(file));
@@ -495,7 +503,8 @@ public class Scrape {
 						avg(team1map_roundsWon) - avg(team2map_roundsWon),
 						avg(team1pm) - avg(team2pm),
 						avg(team1adr) - avg(team2adr),
-						avg(team1kast) - avg(team2kast)
+						avg(team1kast) - avg(team2kast),
+						Collections.max(team1adr) - Collections.max(team2adr)
 						);
 				
 				// each game gives 2 symmetric instances
@@ -506,6 +515,7 @@ public class Scrape {
 						+ instance.avg_pm + ","
 						+ instance.avg_adr + ","
 						+ instance.avg_kast + ","
+						+ instance.max_adr + ","
 						+ (team1.equals(winner) ? 1 : 0) + "\n"
 						);
 				bw.write(-instance.avg_winrate + ","
@@ -515,6 +525,7 @@ public class Scrape {
 						+ -instance.avg_pm + ","
 						+ -instance.avg_adr + ","
 						+ -instance.avg_kast + ","
+						+ -instance.max_adr + ","
 						+ (team2.equals(winner) ? 1 : 0) + "\n"
 						);
 			} catch (Exception e) {
@@ -560,8 +571,6 @@ public class Scrape {
 		public int compareTo(Stats arg0) {
 			return Long.signum(this.date - arg0.date);
 		}
-		
-		
 	}
 	
 	/**
@@ -575,13 +584,15 @@ public class Scrape {
 		double avg_pm;
 		double avg_adr;
 		double avg_kast;
+		double max_adr;
 		public Instance(double avg_winrate,
 				double avg_roundsWon,
 				double avg_map_winrate,
 				double avg_map_roundsWon,
 				double avg_pm,
 				double avg_adr,
-				double avg_kast) {
+				double avg_kast,
+				double max_adr) {
 			this.avg_winrate = avg_winrate;
 			this.avg_roundsWon = avg_roundsWon;
 			this.avg_map_winrate = avg_map_winrate;
@@ -589,6 +600,7 @@ public class Scrape {
 			this.avg_pm = avg_pm;
 			this.avg_adr = avg_adr;
 			this.avg_kast = avg_kast;
+			this.max_adr = max_adr;
 		}
 	}
 	
